@@ -122,24 +122,26 @@ npm run test
 ## ☁️ GCP Native Deployment (Cloud Run)
 
 - **GCP Project ID**: `adaptive-learning-506305`
-- **Region**: `us-west2`
+- **Region**: `us-central1`
 
-### 1. Enable GCP APIs (Cloud Shell)
-Run the automated script to activate required GCP APIs and create Pub/Sub topics:
+### 1. Cloud Shell 1-Click Deployment (Recommended)
+
+Open **[Google Cloud Shell](https://shell.cloud.google.com)** and run:
 
 ```bash
-chmod +x gcp-enable-apis.sh
-./gcp-enable-apis.sh
+git clone https://github.com/arnabbhattacharjee1/Adaptive-Learning.git && cd Adaptive-Learning && chmod +x deploy.sh && ./deploy.sh
 ```
 
-### 2. Deploy to Cloud Run
-Deploy using the provided multi-stage container manifest:
+### 2. Deploy to Cloud Run CLI Manual
+Deploy using gcloud:
 
 ```bash
-gcloud run deploy alis-backend \
-  --project=adaptive-learning-506305 \
-  --region=us-west2 \
-  --config=gcp-cloud-run.yaml
+gcloud run deploy alis-service \
+  --image=us-central1-docker.pkg.dev/adaptive-learning-506305/alis-repo/alis-app:latest \
+  --region=us-central1 \
+  --platform=managed \
+  --allow-unauthenticated \
+  --set-env-vars=GCP_PROJECT_ID=adaptive-learning-506305,GCP_REGION=us-central1,NODE_ENV=production
 ```
 
 ---

@@ -2,7 +2,7 @@
 set -e
 
 PROJECT_ID="adaptive-learning-506305"
-REGION="us-west2"
+REGION="us-central1"
 SERVICE_NAME="alis-service"
 REPO_NAME="alis-repo"
 IMAGE_TAG="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/alis-app:latest"
@@ -39,5 +39,5 @@ gcloud run deploy "${SERVICE_NAME}" \
   --set-env-vars=GCP_PROJECT_ID="${PROJECT_ID}",GCP_REGION="${REGION}",NODE_ENV=production
 
 echo "========================================================"
-echo "✅ ALIS Successfully Deployed to GCP Cloud Run!"
+echo "✅ ALIS Successfully Deployed to GCP Cloud Run in ${REGION}!"
 echo "========================================================"

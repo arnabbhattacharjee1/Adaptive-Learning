@@ -1,40 +1,38 @@
-# GCP Cloud Run Service Specification for ALIS Backend
+# GCP Cloud Run Manifest for ALIS Backend & Telemetry Ingestion Service
+# Project: adaptive-learning-506305 | Region: us-central1
+
 apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
-  name: alis-backend-service
-  namespace: 'default'
+  name: alis-backend
+  namespace: adaptive-learning-506305
   labels:
-    cloud.googleapis.com/location: us-west2
+    cloud.googleapis.com/location: us-central1
   annotations:
     run.googleapis.com/ingress: all
-    run.googleapis.com/cpu-throttling: "false"
+    run.googleapis.com/launch-stage: GA
 spec:
   template:
     metadata:
       annotations:
-        autoscaling.knative.dev/minScale: "1"
-        autoscaling.knative.dev/maxScale: "100"
-        run.googleapis.com/vpc-access-connector: projects/adaptive-learning-506305/locations/us-west2/connectors/alis-vpc-conn
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "10"
+        run.googleapis.com/cpu-throttling: "true"
     spec:
-      containerConcurrency: 250
+      containerConcurrency: 80
+      timeoutSeconds: 300
       containers:
-      - image: gcr.io/adaptive-learning-506305/alis-backend:latest
-        resources:
-          limits:
-            memory: 1Gi
-            cpu: "1.0"
-        env:
-        - name: NODE_ENV
-          value: production
-        - name: GCP_PROJECT_ID
-          value: adaptive-learning-506305
-        - name: GCP_REGION
-          value: us-west2
-        - name: JWT_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: alis-jwt-secret
-              key: latest
-        ports:
-        - containerPort: 8080
+        - image: us-central1-docker.pkg.dev/adaptive-learning-506305/alis-repo/alis-app:latest
+          resources:
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+          env:
+            - name: GCP_PROJECT_ID
+              value: "adaptive-learning-506305"
+            - name: GCP_REGION
+              value: "us-central1"
+            - name: NODE_ENV
+              value: "production"
+            - name: PUBSUB_TOPIC_TELEMETRY
+              value: "alis-telemetry-events"

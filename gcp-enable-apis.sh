@@ -1,35 +1,36 @@
 #!/usr/bin/env bash
-# ==============================================================================
-# Google Cloud Shell Script: Enable GCP APIs for ALIS
-# Project: adaptive-learning-506305
-# Region: us-west2
-# ==============================================================================
+# Script to enable GCP APIs & create Pub/Sub topic for ALIS
+# Project: adaptive-learning-506305 | Region: us-central1
 
-set -euo pipefail
+set -e
 
-# 1. Set Active GCP Project
-gcloud config set project adaptive-learning-506305
-gcloud config set compute/region us-west2
+PROJECT_ID="adaptive-learning-506305"
+REGION="us-central1"
+TOPIC_NAME="alis-telemetry-events"
 
-echo "🚀 Enabling required GCP APIs for Project adaptive-learning-506305 in us-west2..."
+echo "=========================================================="
+echo "🚀 Enabling GCP Services for Project: ${PROJECT_ID} (${REGION})"
+echo "=========================================================="
 
-# 2. Enable Required GCP Services
+gcloud config set project "${PROJECT_ID}"
+
+echo "1. Enabling GCP Cloud APIs..."
 gcloud services enable \
   run.googleapis.com \
   pubsub.googleapis.com \
-  sqladmin.googleapis.com \
   secretmanager.googleapis.com \
+  sqladmin.googleapis.com \
   artifactregistry.googleapis.com \
-  containerregistry.googleapis.com \
-  vpcaccess.googleapis.com \
-  cloudresourcemanager.googleapis.com \
-  iam.googleapis.com
+  cloudbuild.googleapis.com
 
-echo "✅ All GCP APIs successfully enabled for ALIS deployment!"
+echo "2. Creating Pub/Sub Telemetry Topic: ${TOPIC_NAME}..."
+gcloud pubsub topics create "${TOPIC_NAME}" || true
 
-# 3. Create Cloud Pub/Sub Topic and Subscription
-echo "⚡ Creating Cloud Pub/Sub Topic & Subscription..."
-gcloud pubsub topics create alis-telemetry-topic --project=adaptive-learning-506305 || true
-gcloud pubsub subscriptions create alis-telemetry-sub --topic=alis-telemetry-topic --project=adaptive-learning-506305 || true
+echo "3. Creating Pub/Sub Subscription for Materialized Worker..."
+gcloud pubsub subscriptions create alis-telemetry-sub \
+  --topic="${TOPIC_NAME}" \
+  --ack-deadline=10 || true
 
-echo "🎉 GCP Infrastructure Initialization Complete!"
+echo "=========================================================="
+echo "✅ All GCP Services and Pub/Sub Infrastructure Ready!"
+echo "=========================================================="
