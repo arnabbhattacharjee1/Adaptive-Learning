@@ -14,7 +14,7 @@ echo "========================================================"
 # 1. Set Active GCP Project
 gcloud config set project "${PROJECT_ID}"
 
-# 2. Enable Required APIs & PubSub Topic
+# 2. Enable Required APIs, Grant Developer Connect IAM Roles & Create PubSub Topic
 chmod +x ./gcp-enable-apis.sh
 ./gcp-enable-apis.sh
 
