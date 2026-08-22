@@ -22,7 +22,12 @@ authRouter.post('/google', async (req, res) => {
     let googleId: string;
     let picture: string | undefined;
 
+    const isProduction = process.env.NODE_ENV === 'production';
+
     if (idToken.startsWith('mock_google_id_token_')) {
+      if (isProduction) {
+        return res.status(401).json({ error: 'Mock authentication tokens are disabled in production environment' });
+      }
       googleId = idToken.replace('mock_google_id_token_', '');
       email = `google_user_${googleId}@example.com`;
       name = `Google Learner ${googleId}`;
@@ -71,8 +76,8 @@ authRouter.post('/google', async (req, res) => {
 
     res.cookie('token', token, {
       httpOnly: true,
-      secure: false,
-      sameSite: 'strict',
+      secure: isProduction,
+      sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -117,11 +122,12 @@ authRouter.post('/register', async (req, res) => {
     `).run(userId, createdAt);
 
     const token = generateToken(userId, email);
+    const isProduction = process.env.NODE_ENV === 'production';
 
     res.cookie('token', token, {
       httpOnly: true,
-      secure: false,
-      sameSite: 'strict',
+      secure: isProduction,
+      sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -160,11 +166,12 @@ authRouter.post('/login', async (req, res) => {
     }
 
     const token = generateToken(user.id, user.email);
+    const isProduction = process.env.NODE_ENV === 'production';
 
     res.cookie('token', token, {
       httpOnly: true,
-      secure: false,
-      sameSite: 'strict',
+      secure: isProduction,
+      sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -180,6 +187,11 @@ authRouter.post('/login', async (req, res) => {
 });
 
 authRouter.post('/logout', (req, res) => {
-  res.clearCookie('token');
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: 'lax',
+  });
   return res.json({ message: 'Logged out successfully' });
 });
