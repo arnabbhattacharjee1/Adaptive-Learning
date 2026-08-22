@@ -1,25 +1,35 @@
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-import express, { NextFunction, Request, Response } from 'express';
+import express from 'express';
 import fs from 'fs';
+import helmet from 'helmet';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { authRouter } from './api/authRoutes.js';
 import { routingRouter } from './api/routingRoutes.js';
 import { telemetryRouter } from './api/telemetryRoutes.js';
 import { initDatabase } from './db/index.js';
+import { globalErrorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { validateEnv } from './utils/env.js';
+import { Logger } from './utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// 1. Startup Environment Validation (Fail-Fast)
+const config = validateEnv();
+
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = config.PORT;
 
-// Enable response compression (gzip/brotli) for high network efficiency
+// 2. Security & Header Hardening
+app.use(helmet({
+  contentSecurityPolicy: false, // Disabled for local inline scripts & SPA loading
+}));
+
+// 3. Response Compression & Parsing
 app.use(compression());
-
-// CORS configuration for frontend
 app.use(cors({
   origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
   credentials: true,
@@ -28,41 +38,51 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
-// Initialize Database & Seed DAG
-console.log('⚡ Initializing SQLite Database & Knowledge Graph DAG...');
+// 4. Database & Knowledge Graph DAG Bootstrapper
+Logger.info('⚡ Initializing Database & Knowledge Graph DAG...');
 initDatabase();
-console.log('✅ Database initialized and seed graph validated.');
+Logger.info('✅ Database initialized and seed graph validated.');
 
-// API Routes
+// 5. Cloud Run / Knative Health Check Probes
+app.get(['/', '/health'], (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'alis-backend',
+    environment: config.NODE_ENV,
+    region: config.GCP_REGION,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// 6. Modular API Routes
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/telemetry', telemetryRouter);
 app.use('/api/v1/routing', routingRouter);
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-// Serve frontend static bundle if deployed in single-container mode
+// 7. Single-Container SPA Static Asset Serving
 const publicDir = path.resolve(__dirname, '../public');
 if (fs.existsSync(publicDir)) {
   app.use(express.static(publicDir));
-  app.get('*', (req, res) => {
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      return next();
+    }
     res.sendFile(path.resolve(publicDir, 'index.html'));
   });
 }
 
-// Global Express Error Handler Middleware (Structured Error Responses)
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error('Unhandled Application Error:', err);
-  res.status(500).json({
-    error: 'Internal server error',
-    message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
-  });
-});
+// 8. Resilience & Error Handling Middlewares
+app.use(notFoundHandler);
+app.use(globalErrorHandler);
 
-if (process.env.NODE_ENV !== 'test') {
+// 9. Server Initialization
+if (config.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
-    console.log(`🚀 ALIS Backend Server running on http://localhost:${PORT}`);
+    Logger.info(`🚀 ALIS Enterprise Backend running on port ${PORT}`, {
+      port: PORT,
+      region: config.GCP_REGION,
+      project: config.GCP_PROJECT_ID,
+    });
   });
 }
 
