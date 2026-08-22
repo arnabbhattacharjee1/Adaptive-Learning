@@ -1,7 +1,7 @@
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
-import express from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -50,6 +50,15 @@ if (fs.existsSync(publicDir)) {
     res.sendFile(path.resolve(publicDir, 'index.html'));
   });
 }
+
+// Global Express Error Handler Middleware (Structured Error Responses)
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error('Unhandled Application Error:', err);
+  res.status(500).json({
+    error: 'Internal server error',
+    message: process.env.NODE_ENV === 'production' ? 'An unexpected error occurred' : err.message,
+  });
+});
 
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
