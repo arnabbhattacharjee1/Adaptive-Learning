@@ -2,10 +2,16 @@ import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express from 'express';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { authRouter } from './api/authRoutes.js';
 import { routingRouter } from './api/routingRoutes.js';
 import { telemetryRouter } from './api/telemetryRoutes.js';
 import { initDatabase } from './db/index.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -35,6 +41,15 @@ app.use('/api/v1/routing', routingRouter);
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Serve frontend static bundle if deployed in single-container mode
+const publicDir = path.resolve(__dirname, '../public');
+if (fs.existsSync(publicDir)) {
+  app.use(express.static(publicDir));
+  app.get('*', (req, res) => {
+    res.sendFile(path.resolve(publicDir, 'index.html'));
+  });
+}
 
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
