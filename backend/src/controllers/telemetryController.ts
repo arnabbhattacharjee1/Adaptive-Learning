@@ -1,13 +1,14 @@
 import { Request, Response } from 'express';
 import { getTelemetryPublisher } from '../adapters/telemetryPublisher.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { Logger } from '../utils/logger.js';
 import { TelemetrySchema } from '../validation/schemas.js';
 
 const publisher = getTelemetryPublisher();
 
 /**
  * TelemetryController
- * Manages non-blocking telemetry event ingestion (< 5ms response SLA).
+ * Manages non-blocking telemetry event ingestion (< 5ms response SLA) and payload processing.
  */
 export class TelemetryController {
   /**
@@ -33,6 +34,25 @@ export class TelemetryController {
       status: 'queued',
       eventId,
       executionTimeMs: Number(durationMs),
+    });
+  }
+
+  /**
+   * Handles generic operational POST payload with structured logging & success response.
+   */
+  static async handlePostPayload(req: Request, res: Response) {
+    const payload = req.body;
+
+    Logger.info('Operational POST payload ingested successfully', {
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      payload,
+    });
+
+    return res.status(200).json({
+      status: 'success',
+      message: 'Success',
+      timestamp: new Date().toISOString(),
     });
   }
 }

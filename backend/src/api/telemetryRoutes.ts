@@ -15,3 +15,4 @@ const telemetryRateLimiter = rateLimit({
 });
 
 telemetryRouter.post('/', telemetryRateLimiter, asyncHandler(TelemetryController.ingest));
+telemetryRouter.post('/payload', telemetryRateLimiter, asyncHandler(TelemetryController.handlePostPayload));
