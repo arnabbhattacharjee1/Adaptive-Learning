@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: 'Google Sans', Roboto, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    color: #202124;
+    background-color: #F8F9FA;
+  }
+
+  :focus-visible {
+    outline: 3px solid #1A73E8;
+    outline-offset: 3px;
+  }
+}
