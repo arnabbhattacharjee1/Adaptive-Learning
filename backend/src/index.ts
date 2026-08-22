@@ -1,3 +1,4 @@
+import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express from 'express';
@@ -8,6 +9,9 @@ import { initDatabase } from './db/index.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Enable response compression (gzip/brotli) for high network efficiency
+app.use(compression());
 
 // CORS configuration for frontend
 app.use(cors({

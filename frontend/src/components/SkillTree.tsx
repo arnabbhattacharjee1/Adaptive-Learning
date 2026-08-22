@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LearningNode, NodeEdge, NodeStatus, UserNodeState } from '../types';
 import { Award, CheckCircle, AlertTriangle, Lock, Play, RefreshCw, Zap } from 'lucide-react';
 
@@ -11,7 +11,29 @@ interface SkillTreeProps {
   viewMode: 'graph' | 'tree';
 }
 
-export const SkillTree: React.FC<SkillTreeProps> = ({
+const LEVEL_MAP: Record<string, { row: number; col: number }> = {
+  // Tier 1: New Business & Underwriting Operations
+  'LA-101': { row: 0, col: 1 },
+  'LA-102': { row: 1, col: 0 },
+  'LA-103': { row: 1, col: 2 },
+
+  // Tier 2: In-Force Policy Administration
+  'LA-201': { row: 2, col: 0 },
+  'LA-203': { row: 2, col: 2 },
+  'LA-202': { row: 3, col: 0 },
+  'LA-204': { row: 3, col: 1 },
+
+  // Tier 3: Annuity Payouts & Claims Adjudication
+  'LA-301': { row: 3, col: 2 },
+  'LA-302': { row: 4, col: 0 },
+  'LA-303': { row: 4, col: 2 },
+
+  // Tier 4: Operations & SLA Management
+  'LA-401': { row: 5, col: 0 },
+  'LA-402': { row: 5, col: 2 },
+};
+
+export const SkillTree: React.FC<SkillTreeProps> = React.memo(({
   nodes,
   edges,
   userStates,
@@ -28,41 +50,26 @@ export const SkillTree: React.FC<SkillTreeProps> = ({
     }
   }, [selectedNodeId]);
 
-  const getNodeStatus = (nodeId: string): NodeStatus => {
+  // Memoized Node Status Lookup
+  const getNodeStatus = useCallback((nodeId: string): NodeStatus => {
     if (userStates[nodeId]) {
       return userStates[nodeId].status;
     }
     return nodeId === 'LA-101' ? 'available' : 'locked';
-  };
+  }, [userStates]);
 
-  const getNodePosition = (index: number, total: number) => {
-    const levelMap: Record<string, { row: number; col: number }> = {
-      // Tier 1: New Business & Underwriting Operations
-      'LA-101': { row: 0, col: 1 },
-      'LA-102': { row: 1, col: 0 },
-      'LA-103': { row: 1, col: 2 },
-
-      // Tier 2: In-Force Policy Administration
-      'LA-201': { row: 2, col: 0 },
-      'LA-203': { row: 2, col: 2 },
-      'LA-202': { row: 3, col: 0 },
-      'LA-204': { row: 3, col: 1 },
-
-      // Tier 3: Annuity Payouts & Claims Adjudication
-      'LA-301': { row: 3, col: 2 },
-      'LA-302': { row: 4, col: 0 },
-      'LA-303': { row: 4, col: 2 },
-
-      // Tier 4: Operations & SLA Management
-      'LA-401': { row: 5, col: 0 },
-      'LA-402': { row: 5, col: 2 },
-    };
-
-    const pos = levelMap[nodes[index]?.id] || { row: Math.floor(index / 3), col: index % 3 };
-    const x = 120 + pos.col * 220;
-    const y = 80 + pos.row * 125;
-    return { x, y };
-  };
+  // Memoized Node Position Map (Calculated once)
+  const nodePositions = useMemo(() => {
+    const posMap: Record<string, { x: number; y: number }> = {};
+    nodes.forEach((node, index) => {
+      const pos = LEVEL_MAP[node.id] || { row: Math.floor(index / 3), col: index % 3 };
+      posMap[node.id] = {
+        x: 120 + pos.col * 220,
+        y: 80 + pos.row * 125,
+      };
+    });
+    return posMap;
+  }, [nodes]);
 
   const handleKeyDown = (e: React.KeyboardEvent, nodeId: string) => {
     const currentIndex = nodes.findIndex((n) => n.id === nodeId);
@@ -153,12 +160,10 @@ export const SkillTree: React.FC<SkillTreeProps> = ({
             </defs>
 
             {edges.map((edge, idx) => {
-              const parentIdx = nodes.findIndex((n) => n.id === edge.parentNodeId);
-              const childIdx = nodes.findIndex((n) => n.id === edge.childNodeId);
-              if (parentIdx === -1 || childIdx === -1) return null;
+              const parentPos = nodePositions[edge.parentNodeId];
+              const childPos = nodePositions[edge.childNodeId];
+              if (!parentPos || !childPos) return null;
 
-              const parentPos = getNodePosition(parentIdx, nodes.length);
-              const childPos = getNodePosition(childIdx, nodes.length);
               const parentStatus = getNodeStatus(edge.parentNodeId);
               const isMasteredEdge = parentStatus === 'mastered';
 
@@ -179,8 +184,8 @@ export const SkillTree: React.FC<SkillTreeProps> = ({
           </svg>
 
           <div className="relative z-10" style={{ minWidth: '760px', minHeight: '780px' }}>
-            {nodes.map((node, idx) => {
-              const pos = getNodePosition(idx, nodes.length);
+            {nodes.map((node) => {
+              const pos = nodePositions[node.id] || { x: 120, y: 80 };
               const status = getNodeStatus(node.id);
               const badge = getStatusBadge(status);
               const isSelected = selectedNodeId === node.id;
@@ -301,4 +306,4 @@ export const SkillTree: React.FC<SkillTreeProps> = ({
       )}
     </section>
   );
-};
+});

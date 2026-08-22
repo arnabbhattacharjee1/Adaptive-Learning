@@ -10,9 +10,18 @@ const dbPath = path.resolve(__dirname, '../../alis.db');
 
 export const db = new Database(dbPath);
 
-// Enable WAL mode & foreign key constraints
+// Enable WAL mode & foreign key constraints for maximum SQLite concurrency & throughput
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
+
+// Prepared Statement Cache for High Throughput Execution
+let stmtGetAllNodes: Database.Statement | null = null;
+let stmtGetAllEdges: Database.Statement | null = null;
+let stmtGetNodeById: Database.Statement | null = null;
+let stmtGetUserNodeState: Database.Statement | null = null;
+let stmtGetAllUserNodeStates: Database.Statement | null = null;
+let stmtSaveTelemetryEvent: Database.Statement | null = null;
+let stmtUpsertUserNodeState: Database.Statement | null = null;
 
 export function initDatabase() {
   // 1. Users table (Supports Google OAuth & password auth)
@@ -100,6 +109,35 @@ export function initDatabase() {
 
   // Seed Knowledge Graph (Cleans out old legacy modules)
   seedKnowledgeGraph();
+
+  // Initialize Prepared Statement Cache
+  initStatementCache();
+}
+
+function initStatementCache() {
+  stmtGetAllNodes = db.prepare(`SELECT * FROM nodes`);
+  stmtGetAllEdges = db.prepare(`SELECT parent_node_id, child_node_id FROM node_edges`);
+  stmtGetNodeById = db.prepare(`SELECT * FROM nodes WHERE id = ?`);
+  stmtGetUserNodeState = db.prepare(`SELECT * FROM user_node_state WHERE user_id = ? AND node_id = ?`);
+  stmtGetAllUserNodeStates = db.prepare(`SELECT * FROM user_node_state WHERE user_id = ?`);
+  stmtSaveTelemetryEvent = db.prepare(`
+    INSERT INTO telemetry_events 
+    (id, user_id, node_id, event_type, quiz_score, time_on_task_seconds, skips_count, confidence_level, timestamp)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  stmtUpsertUserNodeState = db.prepare(`
+    INSERT INTO user_node_state
+    (user_id, node_id, status, highest_quiz_score, total_time_seconds, confidence_level, attempts_count, remediation_count, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(user_id, node_id) DO UPDATE SET
+      status = excluded.status,
+      highest_quiz_score = MAX(user_node_state.highest_quiz_score, excluded.highest_quiz_score),
+      total_time_seconds = user_node_state.total_time_seconds + excluded.total_time_seconds,
+      confidence_level = CASE WHEN excluded.confidence_level > 0 THEN excluded.confidence_level ELSE user_node_state.confidence_level END,
+      attempts_count = user_node_state.attempts_count + excluded.attempts_count,
+      remediation_count = user_node_state.remediation_count + excluded.remediation_count,
+      updated_at = excluded.updated_at
+  `);
 }
 
 function seedKnowledgeGraph() {
@@ -143,10 +181,11 @@ function seedKnowledgeGraph() {
   seedTx();
 }
 
-/* Database Data Access Methods */
+/* Optimized High-Performance Data Access Methods */
 
 export function getAllNodes(): LearningNode[] {
-  const rows = db.prepare(`SELECT * FROM nodes`).all() as any[];
+  const stmt = stmtGetAllNodes || db.prepare(`SELECT * FROM nodes`);
+  const rows = stmt.all() as any[];
   return rows.map(r => ({
     id: r.id,
     code: r.code,
@@ -161,7 +200,8 @@ export function getAllNodes(): LearningNode[] {
 }
 
 export function getAllEdges(): NodeEdge[] {
-  const rows = db.prepare(`SELECT parent_node_id, child_node_id FROM node_edges`).all() as any[];
+  const stmt = stmtGetAllEdges || db.prepare(`SELECT parent_node_id, child_node_id FROM node_edges`);
+  const rows = stmt.all() as any[];
   return rows.map(r => ({
     parentNodeId: r.parent_node_id,
     childNodeId: r.child_node_id,
@@ -169,7 +209,8 @@ export function getAllEdges(): NodeEdge[] {
 }
 
 export function getNodeById(nodeId: string): LearningNode | undefined {
-  const r = db.prepare(`SELECT * FROM nodes WHERE id = ?`).get(nodeId) as any;
+  const stmt = stmtGetNodeById || db.prepare(`SELECT * FROM nodes WHERE id = ?`);
+  const r = stmt.get(nodeId) as any;
   if (!r) return undefined;
   return {
     id: r.id,
@@ -185,7 +226,8 @@ export function getNodeById(nodeId: string): LearningNode | undefined {
 }
 
 export function getUserNodeState(userId: string, nodeId: string): UserNodeState | undefined {
-  const r = db.prepare(`SELECT * FROM user_node_state WHERE user_id = ? AND node_id = ?`).get(userId, nodeId) as any;
+  const stmt = stmtGetUserNodeState || db.prepare(`SELECT * FROM user_node_state WHERE user_id = ? AND node_id = ?`);
+  const r = stmt.get(userId, nodeId) as any;
   if (!r) return undefined;
   return {
     userId: r.user_id,
@@ -201,7 +243,8 @@ export function getUserNodeState(userId: string, nodeId: string): UserNodeState 
 }
 
 export function getAllUserNodeStates(userId: string): UserNodeState[] {
-  const rows = db.prepare(`SELECT * FROM user_node_state WHERE user_id = ?`).all(userId) as any[];
+  const stmt = stmtGetAllUserNodeStates || db.prepare(`SELECT * FROM user_node_state WHERE user_id = ?`);
+  const rows = stmt.all(userId) as any[];
   return rows.map(r => ({
     userId: r.user_id,
     nodeId: r.node_id,
@@ -216,7 +259,7 @@ export function getAllUserNodeStates(userId: string): UserNodeState[] {
 }
 
 export function saveTelemetryEvent(eventId: string, signal: TelemetrySignal) {
-  const stmt = db.prepare(`
+  const stmt = stmtSaveTelemetryEvent || db.prepare(`
     INSERT INTO telemetry_events 
     (id, user_id, node_id, event_type, quiz_score, time_on_task_seconds, skips_count, confidence_level, timestamp)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -235,7 +278,7 @@ export function saveTelemetryEvent(eventId: string, signal: TelemetrySignal) {
 }
 
 export function upsertUserNodeState(state: UserNodeState) {
-  const stmt = db.prepare(`
+  const stmt = stmtUpsertUserNodeState || db.prepare(`
     INSERT INTO user_node_state
     (user_id, node_id, status, highest_quiz_score, total_time_seconds, confidence_level, attempts_count, remediation_count, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
